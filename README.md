@@ -1,5 +1,8 @@
+*Read this in other languages: [中国](README-cn.md).*
 
 # Deploy the Blockchain network using Kubernetes APIs on IBM Cloud
+
+*Read this in other languages: [한국어](README-ko.md).*
 
 Blockchain is a shared, immutable ledger for recording the history of transactions. The Linux Foundation’s Hyperledger Fabric, the software implementation of blockchain IBM is committed to, is a permissioned network. For developing any blockchain use-case, the very first thing is to have a development environment for Hyperledger Fabric to create and deploy the application. Hyperledger Fabric network can be setup in multiple ways. 
 * [Hyperledger Fabric network On-Premise](http://hyperledger-fabric.readthedocs.io/en/release-1.0/build_network.html)
@@ -65,6 +68,7 @@ Follow these steps to setup and run this code pattern.
 4. [Deploy Hyperledger Fabric Network into Kubernetes Cluster](#4-deploy-hyperledger-fabric-network-into-kubernetes-cluster)
 5. [Test the deployed network](#5-test-the-deployed-network)
 6. [View the Kubernetes Dashboard](#6-view-the-kubernetes-dashboard)
+7. [Connect the network using client SDK](#7-connect-the-network-using-client-sdk)
 
 ### 1. Create a Kubernetes Cluster on IBM Cloud
 
@@ -135,11 +139,11 @@ In the source directory,
   
 #### Modify the Kubernetes configuration scripts
 
-If there is any change in network topology, need to modify the configuration files(.yaml files) appropriately. The configuration files are located in `artifacts` and `configFiles` directory. For example, if you decide to increase/decrease the capacity of persistant volume then you need to modify `createVolume.yaml`.  
+If there is any change in network topology, need to modify the configuration files (.yaml files) appropriately. The configuration files are located in `artifacts` and `configFiles` directory. For example, if you decide to increase/decrease the capacity of persistant volume then you need to modify `createVolume.yaml`.  
 
 #### Run the script to deploy your Hyperledger Fabric Network
 
-Once you have completed the changes(if any) in configuration files, you are ready to deploy your network. Execute the script to deploy your hyperledger fabric network.
+Once you have completed the changes (if any) in configuration files, you are ready to deploy your network. Execute the script to deploy your hyperledger fabric network.
 
   ```
   $ chmod +x setup_blockchainNetwork.sh
@@ -230,6 +234,32 @@ Provide the token and `SIGN-IN`. In the Workloads tab, you can see the resources
 
 The hyperledger fabric network is ready to use. You can start developing your blockchain applications using node sdk or hyperledger composer for this deployed network.
 
+### 7. Connect the network using client SDK
+
+To develop your blockchain application on this deployed network, you need to connect to this network using client SDK. To connect to the network:
+
+* Get the public IP of your kubernetes cluster from IBM Cloud Dashboard.
+* Connect using this public IP and the ports exposed using [services](https://github.com/IBM/blockchain-network-on-kubernetes/blob/master/configFiles/blockchain-services.yaml). 
+For example: The node port for CA is `30054` hence CA Client url will be `http://< public IP of your cluster >:30054/`
+
+In this way, the CA client can be created as:
+
+  ```
+  fabric_ca_client = new Fabric_CA_Client('http://< public IP of your cluster >:30054/', tlsOptions , 'CA1', crypto_suite);
+  ```
+Similarily the following code can be used to setup the fabric network.
+
+  ```
+  // setup the fabric network
+  var fabric_client = new Fabric_Client();
+  
+  var channel = fabric_client.newChannel('channel1');
+  var peer = fabric_client.newPeer('grpc://< public IP of your cluster >:30110');
+  channel.addPeer(peer);
+  var order = fabric_client.newOrderer('grpc://< public IP of your cluster >:31010')
+  channel.addOrderer(order);
+  ```
+
 ## Troubleshooting
 
 [See DEBUGGING.md.](DEBUGGING.md)
@@ -238,7 +268,6 @@ The hyperledger fabric network is ready to use. You can start developing your bl
 
 * [Hyperledger Fabric](https://hyperledger-fabric.readthedocs.io/en/release-1.1/)
 * [Kubernetes Concepts](https://kubernetes.io/docs/concepts/)
-* [IBM Blockchain Platform on IBM Container Service](https://github.com/IBM-Blockchain/ibm-container-service/)
 
 ## License
 

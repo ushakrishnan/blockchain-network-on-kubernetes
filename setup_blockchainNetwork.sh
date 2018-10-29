@@ -13,10 +13,18 @@ echo -e "\nCreating volume"
 if [ "$(kubectl get pvc | grep shared-pvc | awk '{print $2}')" != "Bound" ]; then
     echo "The Persistant Volume does not seem to exist or is not bound"
     echo "Creating Persistant Volume"
-        
-    echo "Running: kubectl create -f ${KUBECONFIG_FOLDER}/createVolume.yaml"
-    kubectl create -f ${KUBECONFIG_FOLDER}/createVolume.yaml
-    sleep 5
+
+    if [ "$1" == "--paid" ]; then
+        echo "You passed argument --paid. Make sure you have an IBM Cloud Kubernetes - Standard tier. Else, remove --paid option"
+        echo "Running: kubectl create -f ${KUBECONFIG_FOLDER}/createVolume-paid.yaml"
+        kubectl create -f ${KUBECONFIG_FOLDER}/createVolume-paid.yaml
+        sleep 5
+    else
+        echo "Running: kubectl create -f ${KUBECONFIG_FOLDER}/createVolume.yaml"
+        kubectl create -f ${KUBECONFIG_FOLDER}/createVolume.yaml
+        sleep 5
+    fi
+
     if [ "kubectl get pvc | grep shared-pvc | awk '{print $3}'" != "shared-pv" ]; then
         echo "Success creating Persistant Volume"
     else
@@ -27,12 +35,27 @@ else
 fi
 
 # Copy the required files(configtx.yaml, cruypto-config.yaml, sample chaincode etc.) into volume
-echo -e "\nCopying artifacts into persistant volume"
+echo -e "\nCreating Copy artifacts job."
 echo "Running: kubectl create -f ${KUBECONFIG_FOLDER}/copyArtifactsJob.yaml"
 kubectl create -f ${KUBECONFIG_FOLDER}/copyArtifactsJob.yaml
 
-sleep 5
-pod=$(kubectl get pods  --show-all --selector=job-name=copyartifacts --output=jsonpath={.items..metadata.name})
+pod=$(kubectl get pods --selector=job-name=copyartifacts --output=jsonpath={.items..metadata.name})
+
+podSTATUS=$(kubectl get pods --selector=job-name=copyartifacts --output=jsonpath={.items..phase})
+
+while [ "${podSTATUS}" != "Running" ]; do
+    echo "Wating for container of copy artifact pod to run. Current status of ${pod} is ${podSTATUS}"
+    sleep 5;
+    if [ "${podSTATUS}" == "Error" ]; then
+        echo "There is an error in copyartifacts job. Please check logs."
+        exit 1
+    fi
+    podSTATUS=$(kubectl get pods --selector=job-name=copyartifacts --output=jsonpath={.items..phase})
+done
+
+echo -e "${pod} is now ${podSTATUS}"
+echo -e "\nStarting to copy artifacts in persistent volume."
+
 #fix for this script to work on icp and ICS
 kubectl cp ./artifacts $pod:/shared/
 
@@ -42,7 +65,7 @@ JOBSTATUS=$(kubectl get jobs |grep "copyartifacts" |awk '{print $3}')
 while [ "${JOBSTATUS}" != "1" ]; do
     echo "Waiting for copyartifacts job to complete"
     sleep 1;
-    PODSTATUS=$(kubectl get pods --show-all| grep "copyartifacts" | awk '{print $3}')
+    PODSTATUS=$(kubectl get pods | grep "copyartifacts" | awk '{print $3}')
         if [ "${PODSTATUS}" == "Error" ]; then
             echo "There is an error in copyartifacts job. Please check logs."
             exit 1
@@ -61,13 +84,13 @@ JOBSTATUS=$(kubectl get jobs |grep utils|awk '{print $3}')
 while [ "${JOBSTATUS}" != "1" ]; do
     echo "Waiting for generateArtifacts job to complete"
     sleep 1;
-    # UTILSLEFT=$(kubectl get pods --show-all | grep utils | awk '{print $2}')
-    UTILSSTATUS=$(kubectl get pods --show-all | grep "utils" | awk '{print $3}')
+    # UTILSLEFT=$(kubectl get pods | grep utils | awk '{print $2}')
+    UTILSSTATUS=$(kubectl get pods | grep "utils" | awk '{print $3}')
     if [ "${UTILSSTATUS}" == "Error" ]; then
             echo "There is an error in utils job. Please check logs."
             exit 1
     fi
-    # UTILSLEFT=$(kubectl get pods --show-all | grep utils | awk '{print $2}')
+    # UTILSLEFT=$(kubectl get pods | grep utils | awk '{print $2}')
     JOBSTATUS=$(kubectl get jobs |grep utils|awk '{print $3}')
 done
 
@@ -105,7 +128,7 @@ JOBSTATUS=$(kubectl get jobs |grep createchannel |awk '{print $3}')
 while [ "${JOBSTATUS}" != "1" ]; do
     echo "Waiting for createchannel job to be completed"
     sleep 1;
-    if [ "$(kubectl get pods --show-all| grep createchannel | awk '{print $3}')" == "Error" ]; then
+    if [ "$(kubectl get pods | grep createchannel | awk '{print $3}')" == "Error" ]; then
         echo "Create Channel Failed"
         exit 1
     fi
@@ -123,7 +146,7 @@ JOBSTATUS=$(kubectl get jobs |grep joinchannel |awk '{print $3}')
 while [ "${JOBSTATUS}" != "1" ]; do
     echo "Waiting for joinchannel job to be completed"
     sleep 1;
-    if [ "$(kubectl get pods --show-all| grep joinchannel | awk '{print $3}')" == "Error" ]; then
+    if [ "$(kubectl get pods | grep joinchannel | awk '{print $3}')" == "Error" ]; then
         echo "Join Channel Failed"
         exit 1
     fi
@@ -141,7 +164,7 @@ JOBSTATUS=$(kubectl get jobs |grep chaincodeinstall |awk '{print $3}')
 while [ "${JOBSTATUS}" != "1" ]; do
     echo "Waiting for chaincodeinstall job to be completed"
     sleep 1;
-    if [ "$(kubectl get pods --show-all| grep chaincodeinstall | awk '{print $3}')" == "Error" ]; then
+    if [ "$(kubectl get pods | grep chaincodeinstall | awk '{print $3}')" == "Error" ]; then
         echo "Chaincode Install Failed"
         exit 1
     fi
@@ -159,7 +182,7 @@ JOBSTATUS=$(kubectl get jobs |grep chaincodeinstantiate |awk '{print $3}')
 while [ "${JOBSTATUS}" != "1" ]; do
     echo "Waiting for chaincodeinstantiate job to be completed"
     sleep 1;
-    if [ "$(kubectl get pods --show-all| grep chaincodeinstantiate | awk '{print $3}')" == "Error" ]; then
+    if [ "$(kubectl get pods | grep chaincodeinstantiate | awk '{print $3}')" == "Error" ]; then
         echo "Chaincode Instantiation Failed"
         exit 1
     fi
